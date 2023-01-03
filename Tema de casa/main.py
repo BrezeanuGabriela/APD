@@ -1,31 +1,33 @@
-import datetime
-import time
-
 from mpi4py import MPI
+import time
 import os
 import regex as re
 import json
-import numpy as np
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 status = MPI.Status()
 
+FINISHED_TAG = 0
 MAP_TAG = 1
 REDUCE_TAG = 2
-NO_WORKER = 3
-MASTER_RANK = 0
-FINISHED_TAG = 0
 FINAL_TAG = 3
 
-FILES = os.listdir("Inputs")
+NO_WORKER = 8
 
 # procesul cu rank-ul 0 e master-ul
+MASTER_RANK = 0
 
-###################### Faza de MAPARE ##########################3
+# FILES = os.listdir("Inputs")
+INPUT_PATH = "TestInputs"
+FILES = os.listdir(INPUT_PATH)
+OUTPUT_MAPPER_DIR = "OutputMappers"
+OUTPUT_REDUCE_DIR = "OutputReducers"
+
+########################################     Faza de MAPARE     ###############################
 if rank == 0:
-    os.mkdir("Outputs")
-    os.mkdir("Outputs2")
+    os.mkdir(OUTPUT_MAPPER_DIR)
+    os.mkdir(OUTPUT_REDUCE_DIR)
 
     # se trimite cate un fisier tuturor workerilor
     for i in range(1, NO_WORKER+1):
@@ -36,37 +38,40 @@ else:
     # bucla in care worker-ul asteapta fisiere pentru a le parsa
     recv_files = True
     while recv_files:
-        msg = comm.recv(source=MPI.ANY_SOURCE,
+        msg = comm.recv(source=MASTER_RANK,
                         tag=MPI.ANY_TAG,
                         status=status)
         tag = status.Get_tag()
 
         if tag == MAP_TAG:
             print(f'On process {rank}, data is {msg} received from {status.Get_source()} on tag {tag}')
-            # print(f'{rank} - proceseaza (map)')
 
-            f = open(f"Inputs/{msg}","r")
+            encoding = 'unicode_escape'
+            f = open(f"{INPUT_PATH}/{msg}", "r", encoding=encoding)
             lines = f.readlines()
             f.close()
 
             lines = " ".join(lines)
-            words = list(filter(lambda x: x != '', re.findall("[a-zA-Z]*", lines)))
+            words = list(filter(lambda x: x != '' and len(x) > 2, re.findall("[a-zA-Z]*", lines)))
+            words = list(map(lambda x: x.lower(), words))
             word_count_dict = dict()
 
             for word in words:
                 word_count_dict[word] = word_count_dict.get(word, 0) + 1
-
-            # print(word_count_dict)
-
+#combiner
             for word, count in word_count_dict.items():
                 timestamp = "".join(str(time.time()).split("."))
-                fileName = f"./Outputs/{word}_{rank}_{timestamp}.txt"
+                fileName = f"./{OUTPUT_MAPPER_DIR}/{word}_{rank}_{timestamp}.txt"
+                # msg contine numele fisierului
                 content = f"{msg}:{count}"
                 f = open(fileName, "w")
                 f.write(content)
                 f.close()
 
+            # anunta Master-ul ca a terminat de parsat fisierul curent
             comm.send("Finished", dest=MASTER_RANK, tag=FINISHED_TAG)
+
+        # mesajul de la Master pentru a iesi din while
         elif tag == FINISHED_TAG:
             if msg == "Finished":
                 # print(f'{rank} - mi-am terminat treaba ca map worker')
@@ -86,59 +91,57 @@ if rank == 0:
         comm.send("Finished", dest=i, tag=FINISHED_TAG)
 
     # un fel de bariera pentru a fi siguri ca si-au terminat activitatea toti workerii din faza de mapare
+    # plus se previn delay-urile dintre comunicatii - scris fisierele
     for i in range(1, NO_WORKER + 1):
         msg = comm.recv(source=MPI.ANY_SOURCE, tag=REDUCE_TAG, status=status)
         print(f"{msg} from {status.Get_source()}")
 
-    # aici ar trebui sa inceapa faza de reduce
-
-#################### Faza de REDUCE ###############################
-    REDUCE_FILES = os.listdir("Outputs")
+########################################     Faza de REDUCE     ###############################
+    REDUCE_FILES = os.listdir(OUTPUT_MAPPER_DIR)
 
     # fiecare worker va face reduce pe cate un cuvant
     vocabulary = list(set(map(lambda fileName: fileName.split("_")[0], REDUCE_FILES)))
-    print(vocabulary)
+    # print(vocabulary)
 
     for i in range(1, NO_WORKER+1):
         word = vocabulary[0]
-        files = list(filter(lambda x: word in x, REDUCE_FILES))
         vocabulary.pop(0)
-        mesaj = " ".join(files)
-        comm.send(mesaj, dest=i, tag=REDUCE_TAG)
 
-    print(vocabulary)
+        # trimit cuvantul de care se va ocupa
+        comm.send(word, dest=i, tag=REDUCE_TAG)
 
+    # se trimit in continuare fisiere pentru etapa de reduce catre workers care si-au terminat treaba
     while len(vocabulary) > 0:
         msg = comm.recv(source=MPI.ANY_SOURCE, tag=FINISHED_TAG, status=status)
 
         word = vocabulary[0]
-        files = list(filter(lambda x: word in x, REDUCE_FILES))
         vocabulary.pop(0)
-        mesaj = " ".join(files)
 
-        comm.send(mesaj, dest=status.Get_source(), tag=REDUCE_TAG)
+        # trimit cuvantul de care se va ocupa
+        comm.send(word, dest=status.Get_source(), tag=REDUCE_TAG)
 
-    # se anunta workerii ca nu mai au fisiere de parsat in faza de map
+    # se anunta workerii ca nu mai au fisiere de parsat in faza de reduce
     for i in range(1, NO_WORKER + 1):
         comm.send("Finished", dest=i, tag=FINISHED_TAG)
 
 else:
     recv_files = True
     while recv_files:
-        msg = comm.recv(source=MPI.ANY_SOURCE,
+        msg = comm.recv(source=MASTER_RANK,
                         tag=MPI.ANY_TAG,
                         status=status)
         tag = status.Get_tag()
 
+        REDUCE_FILES = os.listdir(OUTPUT_MAPPER_DIR)
+
         if tag == REDUCE_TAG:
-            files_for_reduce = msg.split(" ")
+            files_for_reduce = list(filter(lambda x: msg in x, REDUCE_FILES))
 
             file_count_dict = dict()
 
-            word = files_for_reduce[0].split("_")[0]
             for file in files_for_reduce:
                 word = file.split("_")[0]
-                f = open(f"Outputs/{file}", "r")
+                f = open(f"{OUTPUT_MAPPER_DIR}/{file}", "r")
                 content = f.readlines()
                 content = " ".join(content).strip()
                 fileName, count = content.split(":")
@@ -146,7 +149,7 @@ else:
                 file_count_dict[fileName] = file_count_dict.get(fileName, 0) + int(count)
 
             timestamp = "".join(str(time.time()).split("."))
-            fileName = f"./Outputs2/{word}_{rank}_{timestamp}.txt"
+            fileName = f"./{OUTPUT_REDUCE_DIR}/{msg}_{rank}_{timestamp}.txt"
 
             content = ""
             for f, count in file_count_dict.items():
@@ -171,11 +174,13 @@ if rank == 0:
         print(f"{msg} from {status.Get_source()}")
 
     # poate incepe ultima faza de reducere
-    final_dir = "Outputs2"
+    final_dir = OUTPUT_REDUCE_DIR
     comm.send(f"Start final Phase-{final_dir}", dest=1, tag=FINAL_TAG)
 
 elif rank == 1:
-    msg = comm.recv(source=0, tag=FINAL_TAG)
+    msg = comm.recv(source=MASTER_RANK, tag=FINAL_TAG)
+    print(msg)
+
     dir = msg.split("-")[1]
     files = os.listdir(dir)
 
@@ -196,6 +201,8 @@ elif rank == 1:
     result_file = open(f"Results/results.json", "w")
     result_file.write(json_result)
     result_file.close()
+
+    print("Procesarea s-a executat cu succes")
 
 MPI.Finalize()
 
