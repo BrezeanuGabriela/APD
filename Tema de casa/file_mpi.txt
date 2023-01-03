@@ -1,0 +1,11 @@
+# file = MPI.File.Open(comm, f"./Inputs/{msg}", amode=MPI.MODE_RDONLY)
+            # print(file)
+            # # ba = bytearray(file.Get_size())
+            # # # read the contents into a byte array
+            # # file.Iread(ba)
+            # # print(ba)
+            # # print(file)
+            # # # data = np.empty(100)
+            # # # file.Read_all(data)
+            # # # print(data)
+            # file.Close()

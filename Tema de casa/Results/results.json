@@ -1,0 +1,45 @@
+{
+    "si": [
+        "file3.txt:1"
+    ],
+    "papa": [
+        "file5.txt:1"
+    ],
+    "gabriela": [
+        "file1.txt:1"
+    ],
+    "ana": [
+        "file1.txt:3",
+        "file4.txt:1"
+    ],
+    "maria": [
+        "file2.txt:1"
+    ],
+    "ursul": [
+        "file5.txt:1"
+    ],
+    "mure": [
+        "file5.txt:1"
+    ],
+    "mere": [
+        "file1.txt:2",
+        "file3.txt:1",
+        "file4.txt:1"
+    ],
+    "eu": [
+        "file4.txt:1",
+        "file3.txt:1"
+    ],
+    "are": [
+        "file2.txt:1",
+        "file1.txt:1"
+    ],
+    "pere": [
+        "file2.txt:1",
+        "file3.txt:1",
+        "file4.txt:1"
+    ],
+    "am": [
+        "file3.txt:1"
+    ]
+}
