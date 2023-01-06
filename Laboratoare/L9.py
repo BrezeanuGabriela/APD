@@ -29,7 +29,9 @@ C = [
 
 dim = 4
 
+# linia
 i = int(rank / dim)
+# coloana
 j = rank % dim
 
 m1 = A[i][j]
