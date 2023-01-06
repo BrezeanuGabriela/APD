@@ -25,6 +25,7 @@ MASTER_RANK = 0
 
 # FILES = os.listdir("Inputs")
 INPUT_PATH = "TestInputs"
+# INPUT_PATH = "Inputs"
 FILES = os.listdir(INPUT_PATH)
 # FILES = ["25.txt"]
 OUTPUT_MAPPER_DIR = "OutputMappers"
@@ -69,12 +70,11 @@ else:
 #combiner
             for word, count in word_count_dict.items():
                 timestamp = "".join(str(time.time()).split("."))
-                fileName = f"./{OUTPUT_MAPPER_DIR}/{word}_{rank}_{timestamp}.txt"
-                # fileName = f"./{OUTPUT_MAPPER_DIR}/{word}_{msg}_{count}_{rank}_{timestamp}.txt"
+
                 # msg contine numele fisierului
-                content = f"{msg}:{count}"
+                fileName = f"./{OUTPUT_MAPPER_DIR}/{word}_{msg}_{count}_{rank}_{timestamp}.txt"
+
                 f = open(fileName, "w")
-                f.write(content)
                 f.close()
 
             # anunta Master-ul ca a terminat de parsat fisierul curent
@@ -141,32 +141,37 @@ else:
                         status=status)
         tag = status.Get_tag()
 
-        #scandir
-        REDUCE_FILES = os.listdir(OUTPUT_MAPPER_DIR)
-        # REDUCE_FILES = glob.glob(f"{msg}_*.txt")
+        # print(msg)
+        # os.chdir("OutputMappers")
+        # REDUCE_FILES = glob.glob(f"OutputMappers/{msg}_*.txt")
+        REDUCE_FILES = list(os.scandir(f"{OUTPUT_MAPPER_DIR}"))
+        # print(REDUCE_FILES)
 
         if tag == REDUCE_TAG:
-            files_for_reduce = list(filter(lambda x: msg in x, REDUCE_FILES))
+            files_for_reduce = list(map(lambda x: x.name, filter(lambda x: msg in x.name, REDUCE_FILES)))
+            # files_for_reduce = REDUCE_FILES
 
             file_count_dict = dict()
 
             for file in files_for_reduce:
-                word = file.split("_")[0]
-                f = open(f"{OUTPUT_MAPPER_DIR}/{file}", "r")
-                content = f.readlines()
-                content = " ".join(content).strip()
-                fileName, count = content.split(":")
+                # file = file.split("/")[1]
+                elements_of_fileName = file.split("_")
+                word = elements_of_fileName[0]
+                fileName = elements_of_fileName[1]
+                count = elements_of_fileName[2]
 
                 file_count_dict[fileName] = file_count_dict.get(fileName, 0) + int(count)
 
             timestamp = "".join(str(time.time()).split("."))
             fileName = f"./{OUTPUT_REDUCE_DIR}/{msg}_{rank}_{timestamp}.txt"
 
+            # print(file_count_dict)
             content = ""
             for f, count in file_count_dict.items():
                 content += f"{f}:{count}\n"
 
             content = content.strip()
+            # print(content)
 
             f = open(fileName, "w")
             f.write(content)
